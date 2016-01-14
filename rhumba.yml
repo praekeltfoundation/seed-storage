@@ -1,0 +1,3 @@
+queues:
+    - name: gluster
+      plugin: seedstore.gluster
