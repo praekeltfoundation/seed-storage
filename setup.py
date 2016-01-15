@@ -9,6 +9,7 @@ setup(
     description="A distributed service for managing container databases and shared storage",
     author='Colin Alston',
     author_email='colin@praekelt.com',
+    packages=find_packages(),
     include_package_data=True,
     install_requires=[
         'Twisted',
