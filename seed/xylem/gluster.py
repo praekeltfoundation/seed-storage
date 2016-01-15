@@ -6,7 +6,7 @@ from rhumba.utils import fork
 
 class Plugin(RhumbaPlugin):
     def __init__(self, config):
-        super(RhumbaPlugin, self).__init__(config)
+        super(Plugin, self).__init__(config)
 
         self.gluster_path = config.get('gluster_path', '/usr/sbin/gluster')
         self.gluster_nodes = config['gluster_nodes']
@@ -60,13 +60,8 @@ class Plugin(RhumbaPlugin):
 
         defer.returnValue(vols)
 
-    @defer.inlineCallbacks
-    def createVolume(self, name):
-        """ Creates a Gluster volume
-        """
-        
-
-        args = []
+    def _createArgs(self, name, createpath=True):
+        args = ['volume', 'create', name]
 
         if self.gluster_stripe:
             args.append('stripe %s' % self.gluster_stripe)
@@ -74,15 +69,23 @@ class Plugin(RhumbaPlugin):
         if self.gluster_replica:
             args.append('replica %s' % self.gluster_replica)
 
-        for node in self.gluster_nodes:
-            for mount in self.gluster_mounts:
+        for mount in self.gluster_mounts:
+            for node in self.gluster_nodes:
                 path = os.path.join(mount, 'xylem-%s' % name)
-                os.makedirs(path)
+                if createpath:
+                    os.makedirs(path)
                 args.append('%s:%s' % (node, mount))
 
         args.append('force')
 
-        yield self.callGluster('volume', 'create', name, *args)
+        return tuple(args)
+
+    @defer.inlineCallbacks
+    def createVolume(self, name):
+        """ Creates a Gluster volume
+        """
+
+        yield self.callGluster(*self._createArgs(name))
 
         yield self.callGluster('volume', 'start', name)
 
