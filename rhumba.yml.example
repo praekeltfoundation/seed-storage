@@ -1,0 +1,9 @@
+queues:
+    - name: gluster
+      plugin: seedstore.gluster
+      gluster_mounts: 
+        - /data
+      gluster_nodes:
+        - gluster01.foo.bar
+        - gluster02.foo.bar
+      gluster_replica: 2

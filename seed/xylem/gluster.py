@@ -61,6 +61,8 @@ class Plugin(RhumbaPlugin):
         defer.returnValue(vols)
 
     def _createArgs(self, name, createpath=True):
+        """ Build argument list for volume creation
+        """
         args = ['volume', 'create', name]
 
         if self.gluster_stripe:
