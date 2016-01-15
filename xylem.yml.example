@@ -1,6 +1,6 @@
 queues:
     - name: gluster
-      plugin: seedstore.gluster
+      plugin: seed.xylem.gluster
       gluster_mounts: 
         - /data
       gluster_nodes:
