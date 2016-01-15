@@ -2,16 +2,17 @@ from setuptools import setup, find_packages
 
 
 setup(
-    name="seedstore",
+    name="seed.xylem",
     version='0.0.1',
-    url='http://github.com/praekeltfoundation/seed-storage',
+    url='http://github.com/praekeltfoundation/seed-xylem',
     license='MIT',
-    description="A storage control system",
+    description="A distributed service for managing container databases and shared storage",
     author='Colin Alston',
     author_email='colin@praekelt.com',
     include_package_data=True,
     install_requires=[
         'Twisted',
+        'rhumba'
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
