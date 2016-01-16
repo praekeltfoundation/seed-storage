@@ -5,14 +5,14 @@ from rhumba import RhumbaPlugin
 from rhumba.utils import fork
 
 class Plugin(RhumbaPlugin):
-    def __init__(self, config):
-        super(Plugin, self).__init__(config)
+    def __init__(self, *a):
+        super(Plugin, self).__init__(*a)
 
-        self.gluster_path = config.get('gluster_path', '/usr/sbin/gluster')
-        self.gluster_nodes = config['gluster_nodes']
-        self.gluster_mounts = config.get('gluster_mounts', ['/data'])
-        self.gluster_replica = config.get('gluster_replica')
-        self.gluster_stripe = config.get('gluster_stripe')
+        self.gluster_path = self.config.get('gluster_path', '/usr/sbin/gluster')
+        self.gluster_nodes = self.config['gluster_nodes']
+        self.gluster_mounts = self.config.get('gluster_mounts', ['/data'])
+        self.gluster_replica = self.config.get('gluster_replica')
+        self.gluster_stripe = self.config.get('gluster_stripe')
 
     @defer.inlineCallbacks
     def callGluster(self, *args):
@@ -66,17 +66,15 @@ class Plugin(RhumbaPlugin):
         args = ['volume', 'create', name]
 
         if self.gluster_stripe:
-            args.append('stripe %s' % self.gluster_stripe)
+            args.extend(['stripe', str(self.gluster_stripe)])
 
         if self.gluster_replica:
-            args.append('replica %s' % self.gluster_replica)
+            args.extend(['replica', str(self.gluster_replica)])
 
         for mount in self.gluster_mounts:
+            path = os.path.join(mount, 'xylem-%s' % name)
             for node in self.gluster_nodes:
-                path = os.path.join(mount, 'xylem-%s' % name)
-                if createpath:
-                    os.makedirs(path)
-                args.append('%s:%s' % (node, mount))
+                args.append('%s:%s' % (node, path))
 
         args.append('force')
 
@@ -87,15 +85,46 @@ class Plugin(RhumbaPlugin):
         """ Creates a Gluster volume
         """
 
-        yield self.callGluster(*self._createArgs(name))
+        args = self._createArgs(name)
+
+        # Fan out in rhumba and create volume paths
+        queue = self.queue_name
+        cluster_queues = yield self.client.clusterQueues()
+        server_uuids = [i['uuid'] for i in cluster_queues[queue]]
+
+        id = yield self.client.queue(queue, 'createdirs', {'name': name},
+            uids=server_uuids)
+
+        # Wait for all servers to finish
+        for uid in server_uuids:
+            yield self.client.waitForResult(queue, id, timeout=60, suid=uid)
+
+        self.log('[gluster] %s' % ' '.join(args))
+
+        yield self.callGluster(*args)
 
         yield self.callGluster('volume', 'start', name)
 
+    def call_createdirs(self, args):
+        """Fan out call to create directories
+        """
+        name = args['name']
+
+        for mount in self.gluster_mounts:
+            path = os.path.join(mount, name)
+            try:
+                os.makedirs(path)
+            except os.error, e:
+                # Raise any error except path exists
+                if e.errno != 17:
+                    return {'Err': str(e)}
+
+        return {'Err': None}
 
     @defer.inlineCallbacks
     def call_createvolume(self, args):
 
-        name = args.get('name')
+        name = args['name']
 
         vols = yield self.getVolumes()
 
