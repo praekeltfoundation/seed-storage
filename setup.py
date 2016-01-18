@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="seed.xylem",
-    version='0.0.2',
+    version='0.0.3',
     url='http://github.com/praekeltfoundation/seed-xylem',
     license='MIT',
     description="A distributed service for managing container databases and shared storage",
