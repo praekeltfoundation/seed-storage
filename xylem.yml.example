@@ -7,3 +7,10 @@ queues:
         - gluster01.foo.bar
         - gluster02.foo.bar
       gluster_replica: 2
+
+    - name: postgres
+      plugin: seed.xylem.postgres
+      key: mysecretkey
+      servers:
+        - hostname: localhost
+          username: postgres

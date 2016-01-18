@@ -13,7 +13,9 @@ setup(
     include_package_data=True,
     install_requires=[
         'Twisted',
-        'rhumba'
+        'rhumba',
+        'psycopg2',
+        'pycrypto'
     ],
     classifiers=[
         'Development Status :: 4 - Beta',

@@ -1,5 +1,5 @@
 #!/bin/bash
 
 fpm -s python -t deb --no-python-dependencies --after-install scripts/post-install.sh --deb-init scripts/xylem \
-    -d python-twisted -d python-yaml -d python-openssl -d python-rhumba \
+    -d python-twisted -d python-yaml -d python-openssl -d python-crypto -d python-rhumba \
     -a amd64 -n seed-xylem setup.py
