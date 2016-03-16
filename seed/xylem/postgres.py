@@ -17,8 +17,8 @@ from rhumba import RhumbaPlugin
 from rhumba.utils import fork
 
 class Plugin(RhumbaPlugin):
-    def __init__(self, *a):
-        super(Plugin, self).__init__(*a)
+    def __init__(self, *args, **kw):
+        super(Plugin, self).__init__(*args, **kw)
 
         self.servers = self.config['servers']
 
