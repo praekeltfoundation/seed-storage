@@ -35,5 +35,5 @@ class TestMarathonSync(TestCase):
             "http://localhost:8080/v2/groups", "PUT",
             '{"id": "/t", "apps": []}',
             '{"version":"vvv","deploymentId":"ddd"}')
-        resp = yield plugin.call_update_group("foo.json")
+        resp = yield plugin.call_update_group({"group_json_file": "foo.json"})
         self.assertEqual(resp, '{"version":"vvv","deploymentId":"ddd"}')

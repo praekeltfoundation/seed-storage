@@ -1,15 +1,19 @@
+from functools import wraps
+
 from twisted.internet.defer import gatherResults
 from twisted.web.client import getPage
 
 from rhumba import RhumbaPlugin, cron
 
 
+def unpack_args(fn):
+    return wraps(fn)(lambda self, args: fn(self, **args))
+
+
 class Plugin(RhumbaPlugin):
     """
     A plugin to periodically push an application group definition to Marathon.
     """
-
-    getPage = getPage  # To stub out in tests.
 
     def __init__(self, *args, **kw):
         super(Plugin, self).__init__(*args, **kw)
@@ -19,25 +23,26 @@ class Plugin(RhumbaPlugin):
         self.group_json_files = self.config["group_json_files"]
 
     @cron(min="*/1")
-    def call_do_thing(self, args):
-        self.log("Did thing: %r" % (args,))
-        return self.call_update_groups()
-
+    @unpack_args
     def call_update_groups(self):
+        """
+        Send app group definitions to Marathon.
+        """
         ds = []
-        for group_json_file in self.group_json_files:
-            ds.append(self.call_update_group(group_json_file))
+        for filepath in self.group_json_files:
+            ds.append(self.call_update_group({'group_json_file': filepath}))
         return gatherResults(ds)
 
+    @unpack_args
     def call_update_group(self, group_json_file):
         self.log("Updating %r" % (group_json_file,))
         body = self.readfile(group_json_file)
         d = self._call_marathon("PUT", "v2/groups", body)
-        d.addBoth(self._logcb)
+        d.addBoth(self._logcb, "API response for %s: %%r" % (group_json_file,))
         return d
 
-    def _logcb(self, r, msg=" ... result: %r"):
-        self.log(msg % (r,))
+    def _logcb(self, r, msgfmt):
+        self.log(msgfmt % (r,))
         return r
 
     def _call_marathon(self, method, path, body=None):
@@ -51,3 +56,9 @@ class Plugin(RhumbaPlugin):
         """
         with open(filepath, "r") as f:
             return f.read()
+
+    def getPage(self, *args, **kw):
+        """
+        Proxy twisted.web.client.getPage so we can stub it out in tests.
+        """
+        return getPage(*args, **kw)
