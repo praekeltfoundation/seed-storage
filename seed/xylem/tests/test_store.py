@@ -10,7 +10,7 @@ class Gluster(unittest.TestCase):
             'name': 'gluster', 
             'gluster_nodes': ['test'],
             'gluster_mounts': ['/data'],
-        })
+        }, None)
 
         self.plug.callGluster = lambda *args: defer.maybeDeferred(
             self.fakeGlusterCommand, *args)
@@ -69,7 +69,7 @@ class Postgres(unittest.TestCase):
             'servers': [{
                 'hostname': 'localhost'
             }]
-        })
+        }, None)
 
     def test_pwgens(self):
         enc = self.plug._encrypt('Test string')
