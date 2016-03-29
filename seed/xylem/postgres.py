@@ -107,6 +107,8 @@ class Plugin(RhumbaPlugin):
     def call_create_database(self, args):
         name = args['name']
 
+        extensions = args.get('extensions', [])
+
         if not re.match('^\w+$', name):
             defer.returnValue({"Err": "Database name must be alphanumeric"})
 
@@ -161,6 +163,23 @@ class Plugin(RhumbaPlugin):
 
                 xylemdb.close()
                 rdb.close()
+
+                if extensions:
+                    drdb = self._get_connection(name, 
+                        server['hostname'], 
+                        int(server.get('port', 5432)),
+                        server.get('username', 'postgres'),
+                        server.get('password')
+                    )
+
+                    if 'postgis' in extensions:
+                        r = yield drdb.runOperation(
+                            "CREATE EXTENSION postgis;")
+                        r = yield drdb.runOperation(
+                            "CREATE EXTENSION postgis_topology;")
+
+                    drdb.close()
+
                 defer.returnValue({
                     'Err': None, 
                     'hostname': server['hostname'],
