@@ -1,13 +1,13 @@
-from twisted.trial import unittest
-
 from twisted.internet import defer
+from twisted.trial.unittest import TestCase
 
-from seed.xylem import gluster, postgres
+from seed.xylem import gluster
 
-class Gluster(unittest.TestCase):
+
+class TestGlusterPlugin(TestCase):
     def setUp(self):
         self.plug = gluster.Plugin({
-            'name': 'gluster', 
+            'name': 'gluster',
             'gluster_nodes': ['test'],
             'gluster_mounts': ['/data'],
         }, None)
@@ -60,21 +60,3 @@ class Gluster(unittest.TestCase):
         self.assertEquals(create[3], 'stripe')
         self.assertEquals(create[5], 'test:/data1/xylem-testvol')
         self.assertEquals(create[6], 'test:/data2/xylem-testvol')
-
-class Postgres(unittest.TestCase):
-    def setUp(self):
-        self.plug = postgres.Plugin({
-            'name': 'postgres',
-            'key': 'mysecretkey',
-            'servers': [{
-                'hostname': 'localhost'
-            }]
-        }, None)
-
-    def test_pwgens(self):
-        enc = self.plug._encrypt('Test string')
-
-        dec = self.plug._decrypt(enc)
-
-        self.assertEquals(dec, 'Test string')
-
