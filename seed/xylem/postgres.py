@@ -4,6 +4,13 @@ import uuid
 import time
 import re
 import random
+
+try:
+    # Partly to keep flake8 happy, partly to support psycopg2.
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
 import psycopg2
 from psycopg2 import errorcodes
 
@@ -14,7 +21,7 @@ from twisted.internet import defer, reactor
 from twisted.enterprise import adbapi
 
 from rhumba import RhumbaPlugin
-from rhumba.utils import fork
+
 
 class Plugin(RhumbaPlugin):
     # FIXME: Setup is asynchronous and there may be a race condition if we try

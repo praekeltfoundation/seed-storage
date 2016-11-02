@@ -14,9 +14,13 @@ setup(
     install_requires=[
         'Twisted',
         'rhumba',
-        'psycopg2',
-        'pycrypto'
     ],
+    extras_require={
+        'postgres': [
+            'psycopg2cffi',
+            'pycrypto',
+        ],
+    },
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: System Administrators',

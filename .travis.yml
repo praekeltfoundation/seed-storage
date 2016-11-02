@@ -24,7 +24,7 @@ before_install:
 
 install:
   - pip install --upgrade pip # Upgrade pip to get wheel caching
-  - pip install -e .
+  - pip install -e '.[postgres]'
   - pip install -r requirements-dev.txt
   - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
 script:

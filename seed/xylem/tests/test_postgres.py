@@ -1,3 +1,9 @@
+try:
+    # Partly to keep flake8 happy, partly to support psycopg2.
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
 import psycopg2
 from psycopg2 import errorcodes
 from twisted.internet.defer import inlineCallbacks
