@@ -106,3 +106,17 @@ class TestPostgresPlugin(TestCase):
         # After setup, our table should exist.
         rows = yield self.run_query(plug, "SELECT * FROM databases")
         self.assertEqual(rows, [])
+
+    @inlineCallbacks
+    def test_setup_db_again(self):
+        """
+        Database setup is idempotent.
+        """
+        plug = yield self.get_plugin()
+        # After (auto)setup, our table should exist.
+        rows = yield self.run_query(plug, "SELECT * FROM databases")
+        self.assertEqual(rows, [])
+        yield plug._setup_db()
+        # After a second setup, our table should still exist.
+        rows = yield self.run_query(plug, "SELECT * FROM databases")
+        self.assertEqual(rows, [])
