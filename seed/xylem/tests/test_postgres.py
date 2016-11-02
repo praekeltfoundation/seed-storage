@@ -81,12 +81,42 @@ class TestPostgresPlugin(TestCase):
     ###################
     # Tests start here.
 
-    def test_pwgens(self):
+    def test_pwgens_old_old(self):
+        """
+        We can encrypt and decrypt passwords.
+        """
+        plug = self.get_plugin_no_setup()
+        enc = plug._encrypt_old('Test string')
+        self.assertNotEqual(enc, 'Test string')
+        dec = plug._decrypt_old(enc)
+        self.assertEqual(dec, 'Test string')
+
+    def test_pwgens_new_new(self):
         """
         We can encrypt and decrypt passwords.
         """
         plug = self.get_plugin_no_setup()
         enc = plug._encrypt('Test string')
+        self.assertNotEqual(enc, 'Test string')
+        dec = plug._decrypt(enc)
+        self.assertEqual(dec, 'Test string')
+
+    def test_pwgens_new_old(self):
+        """
+        We can encrypt and decrypt passwords.
+        """
+        plug = self.get_plugin_no_setup()
+        enc = plug._encrypt('Test string')
+        self.assertNotEqual(enc, 'Test string')
+        dec = plug._decrypt_old(enc)
+        self.assertEqual(dec, 'Test string')
+
+    def test_pwgens_old_new(self):
+        """
+        We can encrypt and decrypt passwords.
+        """
+        plug = self.get_plugin_no_setup()
+        enc = plug._encrypt_old('Test string')
         self.assertNotEqual(enc, 'Test string')
         dec = plug._decrypt(enc)
         self.assertEqual(dec, 'Test string')

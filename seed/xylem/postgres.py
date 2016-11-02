@@ -4,6 +4,7 @@ import uuid
 import time
 import re
 import random
+import os
 
 try:
     # Partly to keep flake8 happy, partly to support psycopg2.
@@ -16,6 +17,9 @@ from psycopg2 import errorcodes
 
 from Crypto.Cipher import AES
 from Crypto import Random
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 
 from twisted.internet import defer, reactor
 from twisted.enterprise import adbapi
@@ -44,7 +48,7 @@ class Plugin(RhumbaPlugin):
         if setup_db:
             reactor.callWhenRunning(self._setup_db)
 
-    def _encrypt(self, s):
+    def _encrypt_old(self, s):
         key_iv = Random.new().read(AES.block_size)
 
         cip = AES.new(hashlib.md5(self.key).hexdigest(), AES.MODE_CFB,
@@ -54,7 +58,7 @@ class Plugin(RhumbaPlugin):
 
         return base64.b64encode(pwenc)
 
-    def _decrypt(self, e):
+    def _decrypt_old(self, e):
         msg = base64.b64decode(e)
         
         key_iv = msg[:AES.block_size]
@@ -62,6 +66,29 @@ class Plugin(RhumbaPlugin):
             key_iv)
 
         return cip.decrypt(msg[AES.block_size:])
+
+    def _cipher(self, key_iv):
+        """
+        Construct a Cipher object with suitable parameters.
+
+        The parameters used are compatible with the pycrypto code this
+        implementation replaced.
+        """
+        key = hashlib.md5(self.key).hexdigest()
+        return Cipher(algorithms.AES(key), modes.CFB8(key_iv), backend=default_backend())
+
+    def _encrypt(self, s):
+        key_iv = os.urandom(algorithms.AES.block_size / 8)
+        encryptor = self._cipher(key_iv).encryptor()
+        pwenc = encryptor.update(s) + encryptor.finalize()
+        return base64.b64encode(key_iv + pwenc)
+
+    def _decrypt(self, e):
+        block_size = algorithms.AES.block_size / 8
+        msg = base64.b64decode(e)
+        key_iv = msg[:block_size]
+        decryptor = self._cipher(key_iv).decryptor()
+        return decryptor.update(msg[block_size:]) + decryptor.finalize()
 
     @defer.inlineCallbacks
     def _setup_db(self):
