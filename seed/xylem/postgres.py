@@ -15,9 +15,6 @@ except ImportError:
 import psycopg2
 from psycopg2 import errorcodes
 
-from Crypto.Cipher import AES
-from Crypto import Random
-
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 
@@ -47,25 +44,6 @@ class Plugin(RhumbaPlugin):
 
         if setup_db:
             reactor.callWhenRunning(self._setup_db)
-
-    def _encrypt_old(self, s):
-        key_iv = Random.new().read(AES.block_size)
-
-        cip = AES.new(hashlib.md5(self.key).hexdigest(), AES.MODE_CFB,
-            key_iv)
-
-        pwenc = key_iv + cip.encrypt(s)
-
-        return base64.b64encode(pwenc)
-
-    def _decrypt_old(self, e):
-        msg = base64.b64decode(e)
-        
-        key_iv = msg[:AES.block_size]
-        cip = AES.new(hashlib.md5(self.key).hexdigest(), AES.MODE_CFB,
-            key_iv)
-
-        return cip.decrypt(msg[AES.block_size:])
 
     def _cipher(self, key_iv):
         """

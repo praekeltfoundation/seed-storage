@@ -19,7 +19,6 @@ setup(
         'postgres': [
             'psycopg2cffi',
             'cryptography',
-            'pycrypto',
         ],
     },
     classifiers=[
