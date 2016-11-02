@@ -17,7 +17,10 @@ from rhumba import RhumbaPlugin
 from rhumba.utils import fork
 
 class Plugin(RhumbaPlugin):
+    # FIXME: Setup is asynchronous and there may be a race condition if we try
+    #        to process a request before setup finishes.
     def __init__(self, *args, **kw):
+        setup_db = kw.pop('setup_db', True)
         super(Plugin, self).__init__(*args, **kw)
 
         self.servers = self.config['servers']
@@ -31,7 +34,8 @@ class Plugin(RhumbaPlugin):
 
         self.key = self.config['key']
 
-        reactor.callWhenRunning(self._setup_db)
+        if setup_db:
+            reactor.callWhenRunning(self._setup_db)
 
     def _encrypt(self, s):
         key_iv = Random.new().read(AES.block_size)

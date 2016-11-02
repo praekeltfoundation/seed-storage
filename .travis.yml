@@ -15,7 +15,7 @@ services:
   - postgresql
 
 before_install:
-  - psql -c 'create database xylem;' -U postgres
+  - psql -c 'create database xylem_test_db;' -U postgres
   - |
       if [[ -n "$PYENV_VERSION" ]]; then
         wget https://github.com/praekeltfoundation/travis-pyenv/releases/download/0.2.0/setup-pyenv.sh
@@ -29,7 +29,9 @@ install:
   - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
 script:
   - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov"; else COVERAGE_OPT=""; fi
-  - py.test seed/xylem $COVERAGE_OPT
+  # We can't use py.test at the moment because it hangs indefinitely on database errors.
+  # - py.test seed/xylem $COVERAGE_OPT
+  - trial seed.xylem
   # We don't want this to fail the build (yet)
   - flake8 . || true
 after_success:
