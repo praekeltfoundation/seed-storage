@@ -28,9 +28,7 @@ install:
   - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
 script:
   - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov"; else COVERAGE_OPT=""; fi
-  # We can't use py.test at the moment because it hangs indefinitely on database errors.
-  # - py.test seed/xylem $COVERAGE_OPT
-  - trial seed.xylem
+  - py.test seed/xylem $COVERAGE_OPT
   # We don't want this to fail the build (yet)
   - flake8 . || true
 after_success:

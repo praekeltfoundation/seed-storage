@@ -6,22 +6,13 @@ import re
 import random
 import os
 
-try:
-    # Partly to keep flake8 happy, partly to support psycopg2.
-    from psycopg2cffi import compat
-    compat.register()
-except ImportError:
-    pass
-import psycopg2
-from psycopg2 import errorcodes
-
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-
+from rhumba import RhumbaPlugin
 from twisted.internet import defer, reactor
 from twisted.enterprise import adbapi
 
-from rhumba import RhumbaPlugin
+from seed.xylem.pg_compat import psycopg2, errorcodes
 
 
 class Plugin(RhumbaPlugin):
