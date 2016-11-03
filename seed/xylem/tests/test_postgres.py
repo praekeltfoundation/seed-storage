@@ -253,3 +253,25 @@ class TestPostgresPlugin(TestCase):
         self.assertEqual(result, expected_result)
         dbs = yield self.list_dbs(plug)
         self.assertTrue(dbname in dbs)
+
+    @inlineCallbacks
+    def test_call_create_database_existing_unknown(self):
+        """
+        If a database exists but we don't know about it, we don't touch it.
+        """
+        dbname = "xylem_test_create_unknown"
+        plug = yield self.get_plugin()
+        yield self.dropdb(plug, dbname)
+
+        # Create the database outside of xylem
+        yield self.run_operation(plug, "CREATE DATABASE %s;" % (dbname,))
+        dbs = yield self.list_dbs(plug)
+        self.assertTrue(dbname in dbs)
+
+        # Try to create it through xylem
+        result = yield plug.call_create_database({"name": dbname})
+        self.assertEqual(
+            result, {"Err": "Database exists but not known to xylem"})
+
+        dbs = yield self.list_dbs(plug)
+        self.assertTrue(dbname in dbs)
