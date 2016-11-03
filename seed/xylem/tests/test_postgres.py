@@ -15,8 +15,7 @@ from seed.xylem import postgres
 
 def trap_pg_error(d, exc_type, pgcode=None):
     def trap_err(f):
-        if not isinstance(f.value, exc_type):
-            return f
+        f.trap(exc_type)
         if pgcode is not None and f.value.pgcode != pgcode:
             return f
     return d.addErrback(trap_err)
@@ -32,13 +31,6 @@ def passthrough(f, *args, **kw):
         f(*args, **kw)
         return r
     return cb
-
-
-def cleanup_cursor(d, cur):
-    def close_cb(r):
-        close_cursor(cur)
-        return r
-    return d.addBoth(close_cb)
 
 
 class TestPostgresPlugin(TestCase):
