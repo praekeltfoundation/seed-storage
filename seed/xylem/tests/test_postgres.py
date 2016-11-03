@@ -1,4 +1,3 @@
-import pytest
 from twisted.internet.defer import inlineCallbacks
 from twisted.trial.unittest import TestCase
 
@@ -174,15 +173,11 @@ class TestPostgresPlugin(TestCase):
         dbs = yield self.list_dbs(plug)
         self.assertTrue(dbname in dbs)
 
-    @pytest.mark.xfail(reason="The response fields are different.")
     @inlineCallbacks
     def test_call_create_database_idempotent(self):
         """
         Creating a database is idempotent and returns the same response every
         time.
-
-        FIXME: The response contains different field names depending on whether
-        the database already exists or not. This needs to be fixed in the code.
         """
         dbname = "xylem_test_create_idem"
         plug = yield self.get_plugin()
@@ -207,49 +202,6 @@ class TestPostgresPlugin(TestCase):
 
         # Recreate the database
         result = yield plug.call_create_database({"name": dbname})
-        self.assertEqual(result, expected_result)
-        dbs = yield self.list_dbs(plug)
-        self.assertTrue(dbname in dbs)
-
-    @inlineCallbacks
-    def test_call_create_database_idempotent_broken(self):
-        """
-        Creating a database is idempotent and returns the same response every
-        time.
-
-        FIXME: The response contains different field names depending on whether
-        the database already exists or not. This needs to be fixed in the code.
-        """
-        dbname = "xylem_test_create_idem"
-        plug = yield self.get_plugin()
-        yield self.dropdb(plug, dbname)
-        dbs = yield self.list_dbs(plug)
-        self.assertFalse(dbname in dbs)
-
-        # Create the database
-        result = yield plug.call_create_database({"name": dbname})
-        user = result["user"]
-        password = result["password"]
-        expected_result = {
-            "name": dbname,
-            "user": user,
-            "password": password,
-            "hostname": "localhost",
-            "Err": None,
-        }
-        self.assertEqual(result, expected_result)
-        dbs = yield self.list_dbs(plug)
-        self.assertTrue(dbname in dbs)
-
-        # Recreate the database
-        result = yield plug.call_create_database({"name": dbname})
-        expected_result = {
-            "name": dbname,
-            "username": user,
-            "password": password,
-            "host": "localhost",
-            "Err": None,
-        }
         self.assertEqual(result, expected_result)
         dbs = yield self.list_dbs(plug)
         self.assertTrue(dbname in dbs)

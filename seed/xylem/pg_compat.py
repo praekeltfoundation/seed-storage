@@ -9,5 +9,6 @@ except ImportError:
 
 import psycopg2
 from psycopg2 import errorcodes
+from psycopg2.extras import DictCursor
 
-__all__ = ['psycopg2', 'errorcodes']
+__all__ = ['psycopg2', 'errorcodes', 'DictCursor']
