@@ -1,10 +1,10 @@
 import base64
 import hashlib
-import uuid
-import time
-import re
-import random
 import os
+import random
+import re
+import time
+import uuid
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -13,6 +13,15 @@ from twisted.internet import defer, reactor
 from twisted.enterprise import adbapi
 
 from seed.xylem.pg_compat import psycopg2, errorcodes
+
+
+class APIError(Exception):
+    """
+    Custom exception to make API errors easier to work with.
+    """
+    def __init__(self, err_msg):
+        super(APIError, self).__init__()
+        self.err_msg = err_msg
 
 
 class Plugin(RhumbaPlugin):
@@ -111,16 +120,36 @@ class Plugin(RhumbaPlugin):
     def _fixdb(self, conn):
         conn.autocommit = True
 
-    @defer.inlineCallbacks
     def call_create_database(self, args):
+        cleanups = []  # Will be filled with callables to run afterwards
+
+        def cleanup_cb(r):
+            d = defer.succeed(None)
+            for f in reversed(cleanups):
+                d.addCallback(lambda _: f())
+            return d.addCallback(lambda _: r)
+
+        def api_error_eb(f):
+            f.trap(APIError)
+            return {"Err": f.value.err_msg}
+
+        d = self._call_create_database(args, cleanups.append)
+        d.addBoth(cleanup_cb)
+        d.addErrback(api_error_eb)
+        return d
+
+    @defer.inlineCallbacks
+    def _call_create_database(self, args, add_cleanup):
+        # TODO: Validate args properly.
         name = args['name']
 
         if not re.match('^\w+$', name):
-            defer.returnValue({"Err": "Database name must be alphanumeric"})
+            raise APIError("Database name must be alphanumeric")
 
         check = "SELECT * FROM pg_database WHERE datname=%s;"
 
         xylemdb = self._get_xylem_db()
+        add_cleanup(xylemdb.close)
 
         find_db = "SELECT name, host, username, password FROM databases"\
             " WHERE name=%s"
@@ -128,7 +157,6 @@ class Plugin(RhumbaPlugin):
         row = yield xylemdb.runQuery(find_db, (name,))
 
         if row:
-            xylemdb.close()
             defer.returnValue({
                 'Err': None,
                 'name': row[0][0],
@@ -146,6 +174,7 @@ class Plugin(RhumbaPlugin):
                 int(server.get('port', 5432)),
                 server.get('username', 'postgres'),
                 server.get('password'))
+            add_cleanup(rdb.close)
 
             r = yield rdb.runQuery(check, (name,))
 
@@ -166,8 +195,6 @@ class Plugin(RhumbaPlugin):
                     (name, server['hostname'], user, self._encrypt(password))
                 )
 
-                xylemdb.close()
-                rdb.close()
                 defer.returnValue({
                     'Err': None,
                     'hostname': server['hostname'],
@@ -176,8 +203,4 @@ class Plugin(RhumbaPlugin):
                     'password': password
                 })
             else:
-                xylemdb.close()
-                rdb.close()
-                defer.returnValue({
-                    'Err': 'Database exists but not known to xylem'
-                })
+                raise APIError('Database exists but not known to xylem')
