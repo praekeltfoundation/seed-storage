@@ -1,16 +1,9 @@
-try:
-    # Partly to keep flake8 happy, partly to support psycopg2.
-    from psycopg2cffi import compat
-    compat.register()
-except ImportError:
-    pass
-import psycopg2
-from psycopg2 import errorcodes
 import pytest
 from twisted.internet.defer import inlineCallbacks
 from twisted.trial.unittest import TestCase
 
 from seed.xylem import postgres
+from seed.xylem.pg_compat import psycopg2, errorcodes
 
 
 def trap_pg_error(d, exc_type, pgcode=None):
