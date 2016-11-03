@@ -12,8 +12,7 @@ from rhumba import RhumbaPlugin
 from twisted.internet import defer, reactor
 from twisted.enterprise import adbapi
 
-from seed.xylem.pg_compat import psycopg2, errorcodes
-from psycopg2.extras import DictCursor
+from seed.xylem.pg_compat import psycopg2, errorcodes, DictCursor
 
 
 class APIError(Exception):
