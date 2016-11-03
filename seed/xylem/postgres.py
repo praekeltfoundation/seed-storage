@@ -106,16 +106,12 @@ class Plugin(RhumbaPlugin):
             cp_openfun=self._fixdb)
 
     def _get_xylem_db(self):
-        return adbapi.ConnectionPool(
-            'psycopg2',
-            database=self.db,
+        return self._get_connection(
+            db=self.db,
             host=self.host,
             port=self.port,
             user=self.username,
-            password=self.password,
-            cp_min=1,
-            cp_max=2,
-            cp_openfun=self._fixdb)
+            password=self.password)
 
     def _fixdb(self, conn):
         conn.autocommit = True
