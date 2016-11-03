@@ -13,6 +13,7 @@ from twisted.internet import defer, reactor
 from twisted.enterprise import adbapi
 
 from seed.xylem.pg_compat import psycopg2, errorcodes
+from psycopg2.extras import DictCursor
 
 
 class APIError(Exception):
@@ -103,7 +104,8 @@ class Plugin(RhumbaPlugin):
             password=password,
             cp_min=1,
             cp_max=2,
-            cp_openfun=self._fixdb)
+            cp_openfun=self._fixdb,
+            cursor_factory=DictCursor)
 
     def _get_xylem_db(self):
         return self._get_connection(
@@ -150,15 +152,16 @@ class Plugin(RhumbaPlugin):
         find_db = "SELECT name, host, username, password FROM databases"\
             " WHERE name=%s"
 
-        row = yield xylemdb.runQuery(find_db, (name,))
+        rows = yield xylemdb.runQuery(find_db, (name,))
 
-        if row:
+        if rows:
+            [row] = rows
             defer.returnValue({
                 'Err': None,
-                'name': row[0][0],
-                'host': row[0][1],
-                'username': row[0][2],
-                'password': self._decrypt(row[0][3])
+                'name': row['name'],
+                'host': row['host'],
+                'username': row['username'],
+                'password': self._decrypt(row['password'])
             })
 
         else:
