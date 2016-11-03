@@ -136,6 +136,15 @@ class Plugin(RhumbaPlugin):
         d.addErrback(api_error_eb)
         return d
 
+    def _build_db_response(self, row):
+        return {
+            "Err": None,
+            "name": row['name'],
+            "hostname": row['host'],
+            "user": row['username'],
+            "password": self._decrypt(row['password']),
+        }
+
     @defer.inlineCallbacks
     def _call_create_database(self, args, add_cleanup):
         # TODO: Validate args properly.
@@ -143,8 +152,6 @@ class Plugin(RhumbaPlugin):
 
         if not re.match('^\w+$', name):
             raise APIError("Database name must be alphanumeric")
-
-        check = "SELECT * FROM pg_database WHERE datname=%s;"
 
         xylemdb = self._get_xylem_db()
         add_cleanup(xylemdb.close)
@@ -155,14 +162,7 @@ class Plugin(RhumbaPlugin):
         rows = yield xylemdb.runQuery(find_db, (name,))
 
         if rows:
-            [row] = rows
-            defer.returnValue({
-                'Err': None,
-                'name': row['name'],
-                'host': row['host'],
-                'username': row['username'],
-                'password': self._decrypt(row['password'])
-            })
+            defer.returnValue(self._build_db_response(rows[0]))
 
         else:
             server = random.choice(self.servers)
@@ -175,6 +175,7 @@ class Plugin(RhumbaPlugin):
                 server.get('password'))
             add_cleanup(rdb.close)
 
+            check = "SELECT * FROM pg_database WHERE datname=%s;"
             r = yield rdb.runQuery(check, (name,))
 
             if not r:
@@ -182,24 +183,16 @@ class Plugin(RhumbaPlugin):
                 password = self._create_password()
 
                 create_u = "CREATE USER %s WITH ENCRYPTED PASSWORD %%s;" % user
+                yield rdb.runOperation(create_u, (password,))
                 create_d = "CREATE DATABASE %s ENCODING 'UTF8' OWNER %s;" % (
                     name, user)
+                yield rdb.runOperation(create_d)
 
-                r = yield rdb.runOperation(create_u, (password,))
-                r = yield rdb.runOperation(create_d, (password,))
-
-                yield xylemdb.runOperation(
+                rows = yield xylemdb.runQuery(
                     ("INSERT INTO databases (name, host, username, password)"
-                     " VALUES (%s, %s, %s, %s);"),
-                    (name, server['hostname'], user, self._encrypt(password))
-                )
+                     " VALUES (%s, %s, %s, %s) RETURNING *;"),
+                    (name, server['hostname'], user, self._encrypt(password)))
 
-                defer.returnValue({
-                    'Err': None,
-                    'hostname': server['hostname'],
-                    'name': name,
-                    'user': user,
-                    'password': password
-                })
+                defer.returnValue(self._build_db_response(rows[0]))
             else:
                 raise APIError('Database exists but not known to xylem')
