@@ -4,20 +4,31 @@ import uuid
 import time
 import re
 import random
+import os
+
+try:
+    # Partly to keep flake8 happy, partly to support psycopg2.
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
 import psycopg2
 from psycopg2 import errorcodes
 
-from Crypto.Cipher import AES
-from Crypto import Random
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 
 from twisted.internet import defer, reactor
 from twisted.enterprise import adbapi
 
 from rhumba import RhumbaPlugin
-from rhumba.utils import fork
+
 
 class Plugin(RhumbaPlugin):
+    # FIXME: Setup is asynchronous and there may be a race condition if we try
+    #        to process a request before setup finishes.
     def __init__(self, *args, **kw):
+        setup_db = kw.pop('setup_db', True)
         super(Plugin, self).__init__(*args, **kw)
 
         self.servers = self.config['servers']
@@ -31,26 +42,31 @@ class Plugin(RhumbaPlugin):
 
         self.key = self.config['key']
 
-        reactor.callWhenRunning(self._setup_db)
+        if setup_db:
+            reactor.callWhenRunning(self._setup_db)
+
+    def _cipher(self, key_iv):
+        """
+        Construct a Cipher object with suitable parameters.
+
+        The parameters used are compatible with the pycrypto code this
+        implementation replaced.
+        """
+        key = hashlib.md5(self.key).hexdigest()
+        return Cipher(algorithms.AES(key), modes.CFB8(key_iv), backend=default_backend())
 
     def _encrypt(self, s):
-        key_iv = Random.new().read(AES.block_size)
-
-        cip = AES.new(hashlib.md5(self.key).hexdigest(), AES.MODE_CFB,
-            key_iv)
-
-        pwenc = key_iv + cip.encrypt(s)
-
-        return base64.b64encode(pwenc)
+        key_iv = os.urandom(algorithms.AES.block_size / 8)
+        encryptor = self._cipher(key_iv).encryptor()
+        pwenc = encryptor.update(s) + encryptor.finalize()
+        return base64.b64encode(key_iv + pwenc)
 
     def _decrypt(self, e):
+        block_size = algorithms.AES.block_size / 8
         msg = base64.b64decode(e)
-        
-        key_iv = msg[:AES.block_size]
-        cip = AES.new(hashlib.md5(self.key).hexdigest(), AES.MODE_CFB,
-            key_iv)
-
-        return cip.decrypt(msg[AES.block_size:])
+        key_iv = msg[:block_size]
+        decryptor = self._cipher(key_iv).decryptor()
+        return decryptor.update(msg[block_size:]) + decryptor.finalize()
 
     @defer.inlineCallbacks
     def _setup_db(self):

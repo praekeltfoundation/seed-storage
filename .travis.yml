@@ -1,9 +1,37 @@
 language: python
-python:
-  - 2.7
-install:
-    - pip install .
+matrix:
+  include:
+    - python: "2.7"
+    # # No python 3 (yet)
+    # - python: "3.5"
+    - python: "pypy"
+      env: PYENV_VERSION=pypy-5.4.1 PYENV_VERSION_STRING='PyPy 5.4.1' NO_COVERAGE=1
+cache:
+  - pip
+  - directories:
+    - $HOME/.pyenv_cache
 services:
-    - redis-server
+  - postgresql
+
+before_install:
+  - psql -c 'create database xylem_test_db;' -U postgres
+  - |
+      if [[ -n "$PYENV_VERSION" ]]; then
+        wget https://github.com/praekeltfoundation/travis-pyenv/releases/download/0.2.0/setup-pyenv.sh
+        source setup-pyenv.sh
+      fi
+
+install:
+  - pip install --upgrade pip # Upgrade pip to get wheel caching
+  - pip install -e '.[postgres]'
+  - pip install -r requirements-dev.txt
+  - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
 script:
-    - trial seed.xylem
+  - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov"; else COVERAGE_OPT=""; fi
+  # We can't use py.test at the moment because it hangs indefinitely on database errors.
+  # - py.test seed/xylem $COVERAGE_OPT
+  - trial seed.xylem
+  # We don't want this to fail the build (yet)
+  - flake8 . || true
+after_success:
+  - if [[ -z "$NO_COVERAGE" ]]; then codecov; fi
