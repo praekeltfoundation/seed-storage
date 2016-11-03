@@ -29,7 +29,6 @@ install:
 script:
   - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov"; else COVERAGE_OPT=""; fi
   - py.test seed/xylem $COVERAGE_OPT
-  # We don't want this to fail the build (yet)
-  - flake8 . || true
+  - flake8 .
 after_success:
   - if [[ -z "$NO_COVERAGE" ]]; then codecov; fi
