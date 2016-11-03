@@ -6,7 +6,9 @@ setup(
     version='0.0.4',
     url='http://github.com/praekeltfoundation/seed-xylem',
     license='MIT',
-    description="A distributed service for managing container databases and shared storage",
+    description=(
+        "A distributed service for managing container databases"
+        " and shared storage"),
     author='Colin Alston',
     author_email='colin@praekelt.com',
     packages=find_packages(),

@@ -24,7 +24,7 @@ class Plugin(RhumbaPlugin):
 
         self.servers = self.config['servers']
 
-        # Details for Xylems internal DB 
+        # Details for Xylems internal DB
         self.db = self.config.get('db_name', 'xylem')
         self.host = self.config.get('db_host', 'localhost')
         self.port = self.config.get('db_port', 5432)
@@ -44,7 +44,8 @@ class Plugin(RhumbaPlugin):
         implementation replaced.
         """
         key = hashlib.md5(self.key).hexdigest()
-        return Cipher(algorithms.AES(key), modes.CFB8(key_iv), backend=default_backend())
+        return Cipher(
+            algorithms.AES(key), modes.CFB8(key_iv), backend=default_backend())
 
     def _encrypt(self, s):
         key_iv = os.urandom(algorithms.AES.block_size / 8)
@@ -73,18 +74,19 @@ class Plugin(RhumbaPlugin):
                 raise e
 
         cur.close()
-        
+
     def _create_password(self):
-        # Guranteed random dice rolls 
-        return base64.b64encode(hashlib.sha1(uuid.uuid1().hex).hexdigest()
-            )[:24]
+        # Guranteed random dice rolls
+        return base64.b64encode(
+            hashlib.sha1(uuid.uuid1().hex).hexdigest())[:24]
 
     def _create_username(self, db):
         return base64.b64encode("mydb" + str(
             time.time()+random.random()*time.time())).strip('=').lower()
 
     def _get_connection(self, db, host, port, user, password):
-        return adbapi.ConnectionPool('psycopg2',
+        return adbapi.ConnectionPool(
+            'psycopg2',
             database=db,
             host=host,
             port=port,
@@ -92,11 +94,11 @@ class Plugin(RhumbaPlugin):
             password=password,
             cp_min=1,
             cp_max=2,
-            cp_openfun=self._fixdb
-        )
+            cp_openfun=self._fixdb)
 
     def _get_xylem_db(self):
-        return adbapi.ConnectionPool('psycopg2',
+        return adbapi.ConnectionPool(
+            'psycopg2',
             database=self.db,
             host=self.host,
             port=self.port,
@@ -104,8 +106,7 @@ class Plugin(RhumbaPlugin):
             password=self.password,
             cp_min=1,
             cp_max=2,
-            cp_openfun=self._fixdb
-        )
+            cp_openfun=self._fixdb)
 
     def _fixdb(self, conn):
         conn.autocommit = True
@@ -117,21 +118,20 @@ class Plugin(RhumbaPlugin):
         if not re.match('^\w+$', name):
             defer.returnValue({"Err": "Database name must be alphanumeric"})
 
-
         check = "SELECT * FROM pg_database WHERE datname=%s;"
 
         xylemdb = self._get_xylem_db()
 
         find_db = "SELECT name, host, username, password FROM databases"\
             " WHERE name=%s"
-        
+
         row = yield xylemdb.runQuery(find_db, (name,))
 
         if row:
             xylemdb.close()
             defer.returnValue({
-                'Err': None, 
-                'name': row[0][0], 
+                'Err': None,
+                'name': row[0][0],
                 'host': row[0][1],
                 'username': row[0][2],
                 'password': self._decrypt(row[0][3])
@@ -140,12 +140,12 @@ class Plugin(RhumbaPlugin):
         else:
             server = random.choice(self.servers)
 
-            rdb = self._get_connection('postgres',
-                server['hostname'], 
+            rdb = self._get_connection(
+                'postgres',
+                server['hostname'],
                 int(server.get('port', 5432)),
                 server.get('username', 'postgres'),
-                server.get('password')
-            )
+                server.get('password'))
 
             r = yield rdb.runQuery(check, (name,))
 
@@ -161,15 +161,15 @@ class Plugin(RhumbaPlugin):
                 r = yield rdb.runOperation(create_d, (password,))
 
                 yield xylemdb.runOperation(
-                    "INSERT INTO databases (name, host, username, password)"\
-                    " VALUES (%s, %s, %s, %s);",
+                    ("INSERT INTO databases (name, host, username, password)"
+                     " VALUES (%s, %s, %s, %s);"),
                     (name, server['hostname'], user, self._encrypt(password))
                 )
 
                 xylemdb.close()
                 rdb.close()
                 defer.returnValue({
-                    'Err': None, 
+                    'Err': None,
                     'hostname': server['hostname'],
                     'name': name,
                     'user': user,

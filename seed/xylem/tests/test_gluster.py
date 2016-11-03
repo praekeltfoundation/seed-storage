@@ -48,7 +48,8 @@ class TestGlusterPlugin(TestCase):
     def test_volume_info(self):
         vols = yield self.plug.getVolumes()
 
-        self.assertEquals(vols['gv0']['id'], '8368a90e-2137-49d6-aa7f-377710018c88')
+        self.assertEquals(
+            vols['gv0']['id'], '8368a90e-2137-49d6-aa7f-377710018c88')
 
     @defer.inlineCallbacks
     def test_volume_create(self):
