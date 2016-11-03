@@ -1,14 +1,16 @@
 import os
 
-from twisted.internet import defer, reactor
+from twisted.internet import defer
 from rhumba import RhumbaPlugin
 from rhumba.utils import fork
+
 
 class Plugin(RhumbaPlugin):
     def __init__(self, *args, **kw):
         super(Plugin, self).__init__(*args, **kw)
 
-        self.gluster_path = self.config.get('gluster_path', '/usr/sbin/gluster')
+        self.gluster_path = self.config.get(
+            'gluster_path', '/usr/sbin/gluster')
         self.gluster_nodes = self.config['gluster_nodes']
         self.gluster_mounts = self.config.get('gluster_mounts', ['/data'])
         self.gluster_replica = self.config.get('gluster_replica')
@@ -38,21 +40,21 @@ class Plugin(RhumbaPlugin):
         vol = None
 
         for l in volumeInfo:
-            if not ':' in l:
+            if ':' not in l:
                 continue
 
             k, v = l.split(':', 1)
             v = v.strip()
             if k == 'Volume Name':
                 vol = v
-                vols[vol] = {'bricks':[], 'running': False}
+                vols[vol] = {'bricks': [], 'running': False}
 
             if vol:
                 if k == 'Volume ID':
                     vols[vol]['id'] = v
 
                 if k == 'Status':
-                    if v == 'Started': 
+                    if v == 'Started':
                         vols[vol]['running'] = True
 
                 if k.startswith('Brick') and v:
@@ -92,7 +94,8 @@ class Plugin(RhumbaPlugin):
         cluster_queues = yield self.client.clusterQueues()
         server_uuids = [i['uuid'] for i in cluster_queues[queue]]
 
-        id = yield self.client.queue(queue, 'createdirs', {'name': name},
+        id = yield self.client.queue(
+            queue, 'createdirs', {'name': name},
             uids=server_uuids)
 
         # Wait for all servers to finish
@@ -139,4 +142,3 @@ class Plugin(RhumbaPlugin):
             self.log("Volume created %s" % repr(vols[name]))
 
             defer.returnValue(vols[name])
-            
