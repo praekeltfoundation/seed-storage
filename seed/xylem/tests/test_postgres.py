@@ -2,19 +2,8 @@ from twisted.internet.defer import inlineCallbacks
 from twisted.trial.unittest import TestCase
 
 from seed.xylem import postgres
+from seed.xylem.postgres import ignore_pg_error, cursor_closer
 from seed.xylem.pg_compat import psycopg2, errorcodes
-
-
-def close_cursor(cur):
-    if cur.running:
-        cur.close()
-
-
-def passthrough(f, *args, **kw):
-    def cb(r):
-        f(*args, **kw)
-        return r
-    return cb
 
 
 class TestPostgresPlugin(TestCase):
@@ -51,7 +40,7 @@ class TestPostgresPlugin(TestCase):
 
     def cleanup_databases_table(self, plug):
         d = self.run_operation(plug, "DROP TABLE databases;")
-        postgres.trap_pg_error(d, errorcodes.UNDEFINED_TABLE)
+        ignore_pg_error(d, errorcodes.UNDEFINED_TABLE)
         return d
 
     def dropdb(self, plug, dbname):
@@ -60,20 +49,20 @@ class TestPostgresPlugin(TestCase):
 
     def _dropdb(self, plug, dbname):
         d = self.run_operation(plug, "DROP DATABASE %s;" % (dbname,))
-        postgres.trap_pg_error(d, errorcodes.INVALID_CATALOG_NAME)
+        ignore_pg_error(d, errorcodes.INVALID_CATALOG_NAME)
         return d
 
     def run_query(self, plug, *args, **kw):
         cur = plug._get_xylem_db()
-        self.addCleanup(close_cursor, cur)
+        self.addCleanup(cursor_closer(cur))
         d = cur.runQuery(*args, **kw)
-        return d.addBoth(passthrough(close_cursor, cur))
+        return d.addBoth(cursor_closer(cur))
 
     def run_operation(self, plug, *args, **kw):
         cur = plug._get_xylem_db()
-        self.addCleanup(close_cursor, cur)
+        self.addCleanup(cursor_closer(cur))
         d = cur.runOperation(*args, **kw)
-        return d.addBoth(passthrough(close_cursor, cur))
+        return d.addBoth(cursor_closer(cur))
 
     def list_dbs(self, plug):
         d = self.run_query(

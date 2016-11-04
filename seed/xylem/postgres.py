@@ -77,7 +77,7 @@ class Plugin(RhumbaPlugin):
         cur = self._get_xylem_db()
 
         try:
-            yield trap_pg_error(
+            yield ignore_pg_error(
                 cur.runOperation(db_table), errorcodes.DUPLICATE_TABLE)
         finally:
             cur.close()
@@ -196,9 +196,24 @@ class Plugin(RhumbaPlugin):
                 raise APIError('Database exists but not known to xylem')
 
 
-def trap_pg_error(d, pgcode):
+def ignore_pg_error(d, pgcode):
+    """
+    Ignore a particular postgres error.
+    """
     def trap_err(f):
         f.trap(psycopg2.ProgrammingError)
         if f.value.pgcode != pgcode:
             return f
     return d.addErrback(trap_err)
+
+
+def cursor_closer(cur):
+    """
+    Construct a cursor closing function that can be used on its own or as a
+    passthrough callback.
+    """
+    def close_cursor(r=None):
+        if cur.running:
+            cur.close()
+        return r
+    return close_cursor
