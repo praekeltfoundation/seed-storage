@@ -69,18 +69,17 @@ class Plugin(RhumbaPlugin):
         decryptor = self._cipher(key_iv).decryptor()
         return decryptor.update(msg[block_size:]) + decryptor.finalize()
 
-    @defer.inlineCallbacks
     def _setup_db(self):
-        db_table = "CREATE TABLE databases (name varchar(66) UNIQUE, host"\
-            " varchar(256), username varchar(256), password varchar(256));"
+        db_table = (
+            "CREATE TABLE databases (name varchar(66) UNIQUE, host"
+            " varchar(256), username varchar(256), password varchar(256));")
 
         cur = self._get_xylem_db()
 
-        try:
-            yield ignore_pg_error(
-                cur.runOperation(db_table), errorcodes.DUPLICATE_TABLE)
-        finally:
-            cur.close()
+        d = cur.runOperation(db_table)
+        ignore_pg_error(d, errorcodes.DUPLICATE_TABLE)
+        d.addBoth(cursor_closer(cur))
+        return d
 
     def _create_password(self):
         # Guranteed random dice rolls
@@ -151,7 +150,7 @@ class Plugin(RhumbaPlugin):
             raise APIError("Database name must be alphanumeric")
 
         xylemdb = self._get_xylem_db()
-        add_cleanup(xylemdb.close)
+        add_cleanup(cursor_closer(xylemdb))
 
         find_db = "SELECT name, host, username, password FROM databases"\
             " WHERE name=%s"
@@ -171,7 +170,7 @@ class Plugin(RhumbaPlugin):
                 int(server.get('port', 5432)),
                 server.get('username', 'postgres'),
                 server.get('password'))
-            add_cleanup(rdb.close)
+            add_cleanup(cursor_closer(rdb))
 
             check = "SELECT * FROM pg_database WHERE datname=%s;"
             r = yield rdb.runQuery(check, (name,))
