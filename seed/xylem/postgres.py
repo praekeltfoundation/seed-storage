@@ -165,10 +165,11 @@ class Plugin(RhumbaPlugin):
 
         else:
             server = random.choice(self.servers)
+            connect_addr = server.get('connect_addr', server['hostname'])
 
             rdb = self._get_connection(
                 'postgres',
-                server['hostname'],
+                connect_addr,
                 int(server.get('port', 5432)),
                 server.get('username', 'postgres'),
                 server.get('password'))

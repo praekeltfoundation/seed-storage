@@ -26,20 +26,22 @@ def passthrough(f, *args, **kw):
 
 
 class TestPostgresPlugin(TestCase):
-    def get_plugin_no_setup(self):
+    def get_plugin_no_setup(self, config_override={}):
         """
         Create a plugin without running setup.
         """
-        return postgres.Plugin({
+        config = {
             'db_name': 'xylem_test_db',
             'name': 'postgres',
             'key': 'mysecretkey',
             'servers': [{
                 'hostname': 'localhost'
             }]
-        }, None, setup_db=False)
+        }
+        config.update(config_override)
+        return postgres.Plugin(config, None, setup_db=False)
 
-    def get_plugin(self):
+    def get_plugin(self, config_override={}):
         """
         Create a plugin and run its setup.
 
@@ -49,7 +51,7 @@ class TestPostgresPlugin(TestCase):
         Additionally, we drop any existing xylem table to avoid leaking state
         between tests.
         """
-        plug = self.get_plugin_no_setup()
+        plug = self.get_plugin_no_setup(config_override=config_override)
         d = self.cleanup_databases_table(plug)
         d.addCallback(lambda _: plug._setup_db())
         d.addCallback(lambda _: plug)
@@ -224,6 +226,34 @@ class TestPostgresPlugin(TestCase):
         result = yield plug.call_create_database({"name": dbname})
         self.assertEqual(
             result, {"Err": "Database exists but not known to xylem"})
+
+        dbs = yield self.list_dbs(plug)
+        self.assertTrue(dbname in dbs)
+
+    @inlineCallbacks
+    def test_call_create_database_connect_addr(self):
+        """
+        We can create a new database.
+        """
+        dbname = "xylem_test_create_connaddr"
+        plug = yield self.get_plugin({'servers': [{
+            "hostname": "db.example.com",
+            "connect_addr": "localhost",
+        }]})
+        yield self.dropdb(plug, dbname)
+        dbs = yield self.list_dbs(plug)
+        self.assertFalse(dbname in dbs)
+
+        result = yield plug.call_create_database({"name": dbname})
+        user = result["user"]
+        password = result["password"]
+        self.assertEqual(result, {
+            "name": dbname,
+            "user": user,
+            "password": password,
+            "hostname": "db.example.com",
+            "Err": None,
+        })
 
         dbs = yield self.list_dbs(plug)
         self.assertTrue(dbname in dbs)
