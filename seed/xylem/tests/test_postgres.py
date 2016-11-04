@@ -1,9 +1,44 @@
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.defer import inlineCallbacks, succeed, fail
 from twisted.trial.unittest import TestCase
 
 from seed.xylem import postgres
 from seed.xylem.postgres import ignore_pg_error, cursor_closer
 from seed.xylem.pg_compat import psycopg2, errorcodes
+
+
+class TestPostgresHelpers(TestCase):
+    def test_ignore_pg_error_no_err(self):
+        """
+        Nothing to ignore, let's move on.
+        """
+        d = ignore_pg_error(succeed("Yay"), errorcodes.UNDEFINED_TABLE)
+        self.assertEqual(self.successResultOf(d), "Yay")
+
+    def test_ignore_pg_error_ignore(self):
+        """
+        Ignore the error we're told to ignore.
+        """
+        err = psycopg2.ProgrammingError()
+        err.pgcode = errorcodes.UNDEFINED_TABLE
+        d = ignore_pg_error(fail(err), errorcodes.UNDEFINED_TABLE)
+        self.assertEqual(self.successResultOf(d), None)
+
+    def test_ignore_pg_error_other_error(self):
+        """
+        This is a different error. Explode!
+        """
+        err = psycopg2.ProgrammingError()
+        err.pgcode = errorcodes.INVALID_CATALOG_NAME
+        d = ignore_pg_error(fail(err), errorcodes.UNDEFINED_TABLE)
+        self.assertEqual(self.failureResultOf(d).value, err)
+
+    def test_ignore_pg_error_other_exception(self):
+        """
+        This isn't even a postgres error. Explode!
+        """
+        err = Exception("Goodbye, cruel world.")
+        d = ignore_pg_error(fail(err), errorcodes.UNDEFINED_TABLE)
+        self.assertEqual(self.failureResultOf(d).value, err)
 
 
 class TestPostgresPlugin(TestCase):
