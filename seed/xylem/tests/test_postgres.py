@@ -1,45 +1,63 @@
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.defer import inlineCallbacks, succeed, fail
 from twisted.trial.unittest import TestCase
 
 from seed.xylem import postgres
+from seed.xylem.postgres import ignore_pg_error, cursor_closer
 from seed.xylem.pg_compat import psycopg2, errorcodes
 
 
-def trap_pg_error(d, exc_type, pgcode=None):
-    def trap_err(f):
-        f.trap(exc_type)
-        if pgcode is not None and f.value.pgcode != pgcode:
-            return f
-    return d.addErrback(trap_err)
+class TestPostgresHelpers(TestCase):
+    def test_ignore_pg_error_no_err(self):
+        """
+        Nothing to ignore, let's move on.
+        """
+        d = ignore_pg_error(succeed("Yay"), errorcodes.UNDEFINED_TABLE)
+        self.assertEqual(self.successResultOf(d), "Yay")
 
+    def test_ignore_pg_error_ignore(self):
+        """
+        Ignore the error we're told to ignore.
+        """
+        err = psycopg2.ProgrammingError()
+        err.pgcode = errorcodes.UNDEFINED_TABLE
+        d = ignore_pg_error(fail(err), errorcodes.UNDEFINED_TABLE)
+        self.assertEqual(self.successResultOf(d), None)
 
-def close_cursor(cur):
-    if cur.running:
-        cur.close()
+    def test_ignore_pg_error_other_error(self):
+        """
+        This is a different error. Explode!
+        """
+        err = psycopg2.ProgrammingError()
+        err.pgcode = errorcodes.INVALID_CATALOG_NAME
+        d = ignore_pg_error(fail(err), errorcodes.UNDEFINED_TABLE)
+        self.assertEqual(self.failureResultOf(d).value, err)
 
-
-def passthrough(f, *args, **kw):
-    def cb(r):
-        f(*args, **kw)
-        return r
-    return cb
+    def test_ignore_pg_error_other_exception(self):
+        """
+        This isn't even a postgres error. Explode!
+        """
+        err = Exception("Goodbye, cruel world.")
+        d = ignore_pg_error(fail(err), errorcodes.UNDEFINED_TABLE)
+        self.assertEqual(self.failureResultOf(d).value, err)
 
 
 class TestPostgresPlugin(TestCase):
-    def get_plugin_no_setup(self):
+    def get_plugin_no_setup(self, config_override={}):
         """
         Create a plugin without running setup.
         """
-        return postgres.Plugin({
+        config = {
             'db_name': 'xylem_test_db',
             'name': 'postgres',
             'key': 'mysecretkey',
             'servers': [{
                 'hostname': 'localhost'
             }]
-        }, None, setup_db=False)
+        }
+        config.update(config_override)
+        return postgres.Plugin(config, None, setup_db=False)
 
-    def get_plugin(self):
+    def get_plugin(self, config_override={}):
         """
         Create a plugin and run its setup.
 
@@ -49,7 +67,7 @@ class TestPostgresPlugin(TestCase):
         Additionally, we drop any existing xylem table to avoid leaking state
         between tests.
         """
-        plug = self.get_plugin_no_setup()
+        plug = self.get_plugin_no_setup(config_override=config_override)
         d = self.cleanup_databases_table(plug)
         d.addCallback(lambda _: plug._setup_db())
         d.addCallback(lambda _: plug)
@@ -57,7 +75,7 @@ class TestPostgresPlugin(TestCase):
 
     def cleanup_databases_table(self, plug):
         d = self.run_operation(plug, "DROP TABLE databases;")
-        trap_pg_error(d, psycopg2.ProgrammingError, errorcodes.UNDEFINED_TABLE)
+        ignore_pg_error(d, errorcodes.UNDEFINED_TABLE)
         return d
 
     def dropdb(self, plug, dbname):
@@ -66,21 +84,20 @@ class TestPostgresPlugin(TestCase):
 
     def _dropdb(self, plug, dbname):
         d = self.run_operation(plug, "DROP DATABASE %s;" % (dbname,))
-        trap_pg_error(
-            d, psycopg2.ProgrammingError, errorcodes.INVALID_CATALOG_NAME)
+        ignore_pg_error(d, errorcodes.INVALID_CATALOG_NAME)
         return d
 
     def run_query(self, plug, *args, **kw):
         cur = plug._get_xylem_db()
-        self.addCleanup(close_cursor, cur)
+        self.addCleanup(cursor_closer(cur))
         d = cur.runQuery(*args, **kw)
-        return d.addBoth(passthrough(close_cursor, cur))
+        return d.addBoth(cursor_closer(cur))
 
     def run_operation(self, plug, *args, **kw):
         cur = plug._get_xylem_db()
-        self.addCleanup(close_cursor, cur)
+        self.addCleanup(cursor_closer(cur))
         d = cur.runOperation(*args, **kw)
-        return d.addBoth(passthrough(close_cursor, cur))
+        return d.addBoth(cursor_closer(cur))
 
     def list_dbs(self, plug):
         d = self.run_query(
@@ -224,6 +241,34 @@ class TestPostgresPlugin(TestCase):
         result = yield plug.call_create_database({"name": dbname})
         self.assertEqual(
             result, {"Err": "Database exists but not known to xylem"})
+
+        dbs = yield self.list_dbs(plug)
+        self.assertTrue(dbname in dbs)
+
+    @inlineCallbacks
+    def test_call_create_database_connect_addr(self):
+        """
+        We can create a new database.
+        """
+        dbname = "xylem_test_create_connaddr"
+        plug = yield self.get_plugin({'servers': [{
+            "hostname": "db.example.com",
+            "connect_addr": "localhost",
+        }]})
+        yield self.dropdb(plug, dbname)
+        dbs = yield self.list_dbs(plug)
+        self.assertFalse(dbname in dbs)
+
+        result = yield plug.call_create_database({"name": dbname})
+        user = result["user"]
+        password = result["password"]
+        self.assertEqual(result, {
+            "name": dbname,
+            "user": user,
+            "password": password,
+            "hostname": "db.example.com",
+            "Err": None,
+        })
 
         dbs = yield self.list_dbs(plug)
         self.assertTrue(dbname in dbs)

@@ -69,20 +69,17 @@ class Plugin(RhumbaPlugin):
         decryptor = self._cipher(key_iv).decryptor()
         return decryptor.update(msg[block_size:]) + decryptor.finalize()
 
-    @defer.inlineCallbacks
     def _setup_db(self):
-        db_table = "CREATE TABLE databases (name varchar(66) UNIQUE, host"\
-            " varchar(256), username varchar(256), password varchar(256));"
+        db_table = (
+            "CREATE TABLE databases (name varchar(66) UNIQUE, host"
+            " varchar(256), username varchar(256), password varchar(256));")
 
         cur = self._get_xylem_db()
 
-        try:
-            yield cur.runOperation(db_table)
-        except psycopg2.ProgrammingError, e:
-            if e.pgcode != errorcodes.DUPLICATE_TABLE:
-                raise e
-
-        cur.close()
+        d = cur.runOperation(db_table)
+        ignore_pg_error(d, errorcodes.DUPLICATE_TABLE)
+        d.addBoth(cursor_closer(cur))
+        return d
 
     def _create_password(self):
         # Guranteed random dice rolls
@@ -153,7 +150,7 @@ class Plugin(RhumbaPlugin):
             raise APIError("Database name must be alphanumeric")
 
         xylemdb = self._get_xylem_db()
-        add_cleanup(xylemdb.close)
+        add_cleanup(cursor_closer(xylemdb))
 
         find_db = "SELECT name, host, username, password FROM databases"\
             " WHERE name=%s"
@@ -165,14 +162,15 @@ class Plugin(RhumbaPlugin):
 
         else:
             server = random.choice(self.servers)
+            connect_addr = server.get('connect_addr', server['hostname'])
 
             rdb = self._get_connection(
                 'postgres',
-                server['hostname'],
+                connect_addr,
                 int(server.get('port', 5432)),
                 server.get('username', 'postgres'),
                 server.get('password'))
-            add_cleanup(rdb.close)
+            add_cleanup(cursor_closer(rdb))
 
             check = "SELECT * FROM pg_database WHERE datname=%s;"
             r = yield rdb.runQuery(check, (name,))
@@ -195,3 +193,26 @@ class Plugin(RhumbaPlugin):
                 defer.returnValue(self._build_db_response(rows[0]))
             else:
                 raise APIError('Database exists but not known to xylem')
+
+
+def ignore_pg_error(d, pgcode):
+    """
+    Ignore a particular postgres error.
+    """
+    def trap_err(f):
+        f.trap(psycopg2.ProgrammingError)
+        if f.value.pgcode != pgcode:
+            return f
+    return d.addErrback(trap_err)
+
+
+def cursor_closer(cur):
+    """
+    Construct a cursor closing function that can be used on its own or as a
+    passthrough callback.
+    """
+    def close_cursor(r=None):
+        if cur.running:
+            cur.close()
+        return r
+    return close_cursor
