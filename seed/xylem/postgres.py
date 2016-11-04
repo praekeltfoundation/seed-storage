@@ -77,12 +77,10 @@ class Plugin(RhumbaPlugin):
         cur = self._get_xylem_db()
 
         try:
-            yield cur.runOperation(db_table)
-        except psycopg2.ProgrammingError, e:
-            if e.pgcode != errorcodes.DUPLICATE_TABLE:
-                raise e
-
-        cur.close()
+            yield trap_pg_error(
+                cur.runOperation(db_table), errorcodes.DUPLICATE_TABLE)
+        finally:
+            cur.close()
 
     def _create_password(self):
         # Guranteed random dice rolls
@@ -196,3 +194,11 @@ class Plugin(RhumbaPlugin):
                 defer.returnValue(self._build_db_response(rows[0]))
             else:
                 raise APIError('Database exists but not known to xylem')
+
+
+def trap_pg_error(d, pgcode):
+    def trap_err(f):
+        f.trap(psycopg2.ProgrammingError)
+        if f.value.pgcode != pgcode:
+            return f
+    return d.addErrback(trap_err)

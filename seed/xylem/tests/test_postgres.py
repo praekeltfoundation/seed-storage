@@ -5,14 +5,6 @@ from seed.xylem import postgres
 from seed.xylem.pg_compat import psycopg2, errorcodes
 
 
-def trap_pg_error(d, exc_type, pgcode=None):
-    def trap_err(f):
-        f.trap(exc_type)
-        if pgcode is not None and f.value.pgcode != pgcode:
-            return f
-    return d.addErrback(trap_err)
-
-
 def close_cursor(cur):
     if cur.running:
         cur.close()
@@ -59,7 +51,7 @@ class TestPostgresPlugin(TestCase):
 
     def cleanup_databases_table(self, plug):
         d = self.run_operation(plug, "DROP TABLE databases;")
-        trap_pg_error(d, psycopg2.ProgrammingError, errorcodes.UNDEFINED_TABLE)
+        postgres.trap_pg_error(d, errorcodes.UNDEFINED_TABLE)
         return d
 
     def dropdb(self, plug, dbname):
@@ -68,8 +60,7 @@ class TestPostgresPlugin(TestCase):
 
     def _dropdb(self, plug, dbname):
         d = self.run_operation(plug, "DROP DATABASE %s;" % (dbname,))
-        trap_pg_error(
-            d, psycopg2.ProgrammingError, errorcodes.INVALID_CATALOG_NAME)
+        postgres.trap_pg_error(d, errorcodes.INVALID_CATALOG_NAME)
         return d
 
     def run_query(self, plug, *args, **kw):
