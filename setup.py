@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="seed.xylem",
-    version='0.0.5',
+    version='0.0.6a0',
     url='http://github.com/praekeltfoundation/seed-xylem',
     license='MIT',
     description=(
