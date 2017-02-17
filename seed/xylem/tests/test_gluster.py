@@ -120,11 +120,28 @@ class TestGlusterPlugin(TestCase):
         """
         A volume that does not exist is created.
         """
+        self.assertEqual(self.fake_gluster.volumes.get('testvol'), None)
+
         self.plug.gluster_mounts = ['/data1', '/data2']
         self.plug.gluster_stripe = 2
-        self.assertEqual(self.fake_gluster.volumes.get('testvol'), None)
-        yield self.plug.createVolume('testvol')
+        yield self.plug.call_createvolume({'name': 'testvol'})
+
         vol = self.fake_gluster.volumes['testvol']
         self.assertEqual(vol.bricks, [
             'test:/data1/xylem-testvol', 'test:/data2/xylem-testvol'])
         self.assertEqual(vol.status, 'Started')
+
+    @defer.inlineCallbacks
+    def test_volume_create_existing(self):
+        """
+        A volume that already exists is not modified.
+        """
+        origvol = self.fake_gluster.add_volume('testvol', bricks=[
+            'test:/data1/xylem-testvol', 'test:/data2/xylem-testvol'])
+
+        self.plug.gluster_mounts = ['/data1', '/data2']
+        self.plug.gluster_stripe = 2
+        yield self.plug.call_createvolume({'name': 'testvol'})
+
+        vol = self.fake_gluster.volumes['testvol']
+        self.assertEqual(vol.info(), origvol.info())
