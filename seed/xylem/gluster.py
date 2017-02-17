@@ -29,11 +29,12 @@ class Plugin(RhumbaPlugin):
             defer.returnValue(out.strip('\n').split('\n'))
 
     @defer.inlineCallbacks
-    def getVolumes(self):
+    def getVolumes(self, name=None):
         """ Gets volume information from glusterfs on this server
         """
 
-        volumeInfo = yield self.callGluster('volume', 'info')
+        args = [] if name is None else [name]
+        volumeInfo = yield self.callGluster('volume', 'info', *args)
 
         vols = {}
 

@@ -46,8 +46,9 @@ class FakeGluster(object):
         self.volumes[name] = vol
         return vol
 
-    def cmd_volume_info(self):
-        return sum([vol.info() for vol in self.volumes.values()], [])
+    def cmd_volume_info(self, name=None):
+        vols = self.volumes.values() if name is None else [self.volumes[name]]
+        return sum([vol.info() for vol in vols], [])
 
     def cmd_volume_create(self, name, *args):
         while args[0] in ['replica', 'stripe', 'arbiter', 'transport']:
@@ -112,8 +113,24 @@ class TestGlusterPlugin(TestCase):
 
         vols = yield self.plug.getVolumes()
 
-        self.assertEquals(vols['gv0']['id'], gv0.volume_id)
-        self.assertEquals(vols['gv2']['id'], gv2.volume_id)
+        self.assertEqual(len(vols), 2)
+        self.assertEqual(vols['gv0']['id'], gv0.volume_id)
+        self.assertEqual(vols['gv2']['id'], gv2.volume_id)
+
+    @defer.inlineCallbacks
+    def test_volume_info_specific(self):
+        """
+        We can correctly parse volume info listings for a single volume.
+        """
+        gv0 = self.fake_gluster.add_volume(
+            'gv0', ['qa-mesos-persistence:/data/testbrick'])
+        self.fake_gluster.add_volume(
+            'gv2', ['qa-mesos-persistence:/data/br-gv2'])
+
+        vols = yield self.plug.getVolumes('gv0')
+
+        self.assertEqual(len(vols), 1)
+        self.assertEqual(vols['gv0']['id'], gv0.volume_id)
 
     @defer.inlineCallbacks
     def test_volume_create(self):
