@@ -7,9 +7,10 @@ from seed.xylem import gluster
 
 
 class FakeVolume(object):
-    def __init__(self, name, bricks, volume_id=None):
+    def __init__(self, name, bricks, status='Started', volume_id=None):
         self.name = name
         self.bricks = list(bricks)
+        self.status = status
         if volume_id is None:
             volume_id = str(uuid4())
         self.volume_id = volume_id
@@ -20,7 +21,7 @@ class FakeVolume(object):
             'Volume Name: {0}'.format(self.name),
             'Type: Distribute',
             'Volume ID: {0}'.format(self.volume_id),
-            'Status: Started',
+            'Status: {0}'.format(self.status),
             'Number of Bricks: {0}'.format(len(self.bricks)),
             'Transport-type: tcp',
             'Bricks:',
@@ -32,6 +33,10 @@ class FakeVolume(object):
 
 
 class FakeGluster(object):
+    """
+    Fake gluster implementation that tracks (some) volume state and responds to
+    various commands.
+    """
     def __init__(self):
         self.volumes = {}
 
@@ -44,9 +49,42 @@ class FakeGluster(object):
     def cmd_volume_info(self):
         return sum([vol.info() for vol in self.volumes.values()], [])
 
+    def cmd_volume_create(self, name, *args):
+        while args[0] in ['replica', 'stripe', 'arbiter', 'transport']:
+            args = args[2:]
+        if args[-1] == 'force':
+            args = args[:-1]
+        self.add_volume(name, bricks=list(args), status='Stopped')
+        return []
+
+    def cmd_volume_start(self, name):
+        vol = self.volumes[name]
+        assert vol.status != 'Started'
+        vol.status = 'Started'
+        return []
+
     def call(self, cmd0, cmd1, *args):
         meth = getattr(self, '_'.join(['cmd', cmd0, cmd1]))
         return meth(*args)
+
+
+class FakeRhumbaClient(object):
+    """
+    Fake rhumba client that successfully returns made up data for all
+    (implemented) methods. This is to stub out the the path stuff in the volume
+    creation tests below.
+    """
+    def __init__(self, plug):
+        self.plug = plug
+
+    def clusterQueues(self):
+        return defer.succeed({self.plug.queue_name: [{'uuid': str(uuid4())}]})
+
+    def queue(self, *args, **kw):
+        return defer.succeed(str(uuid4()))
+
+    def waitForResult(self, *args, **kw):
+        return defer.succeed(None)
 
 
 class TestGlusterPlugin(TestCase):
@@ -56,6 +94,7 @@ class TestGlusterPlugin(TestCase):
             'gluster_nodes': ['test'],
             'gluster_mounts': ['/data'],
         }, None)
+        self.plug.client = FakeRhumbaClient(self.plug)
 
         self.fake_gluster = FakeGluster()
         self.plug.callGluster = lambda *args: defer.maybeDeferred(
@@ -63,6 +102,9 @@ class TestGlusterPlugin(TestCase):
 
     @defer.inlineCallbacks
     def test_volume_info(self):
+        """
+        We can correctly parse volume info listings.
+        """
         gv0 = self.fake_gluster.add_volume(
             'gv0', ['qa-mesos-persistence:/data/testbrick'])
         gv2 = self.fake_gluster.add_volume(
@@ -75,13 +117,14 @@ class TestGlusterPlugin(TestCase):
 
     @defer.inlineCallbacks
     def test_volume_create(self):
+        """
+        A volume that does not exist is created.
+        """
         self.plug.gluster_mounts = ['/data1', '/data2']
         self.plug.gluster_stripe = 2
-        create = yield self.plug._createArgs('testvol', createpath=False)
-        print create
-        assert False
-
-        self.assertEquals(create[2], 'testvol')
-        self.assertEquals(create[3], 'stripe')
-        self.assertEquals(create[5], 'test:/data1/xylem-testvol')
-        self.assertEquals(create[6], 'test:/data2/xylem-testvol')
+        self.assertEqual(self.fake_gluster.volumes.get('testvol'), None)
+        yield self.plug.createVolume('testvol')
+        vol = self.fake_gluster.volumes['testvol']
+        self.assertEqual(vol.bricks, [
+            'test:/data1/xylem-testvol', 'test:/data2/xylem-testvol'])
+        self.assertEqual(vol.status, 'Started')
