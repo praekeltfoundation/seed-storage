@@ -47,7 +47,12 @@ class FakeGluster(object):
         return vol
 
     def cmd_volume_info(self, name=None):
-        vols = self.volumes.values() if name is None else [self.volumes[name]]
+        if name:
+            if name not in self.volumes:
+                raise Exception('Volume {0} does not exist'.format(name))
+            vols = [self.volumes[name]]
+        else:
+            vols = self.volumes.values()
         return sum([vol.info() for vol in vols], [])
 
     def cmd_volume_create(self, name, *args):
@@ -112,13 +117,12 @@ class TestGlusterPlugin(TestCase):
             'gv2', ['qa-mesos-persistence:/data/br-gv2'])
 
         vols = yield self.plug.getVolumes()
-
         self.assertEqual(len(vols), 2)
         self.assertEqual(vols['gv0']['id'], gv0.volume_id)
         self.assertEqual(vols['gv2']['id'], gv2.volume_id)
 
     @defer.inlineCallbacks
-    def test_volume_info_specific(self):
+    def test_volume_info_single(self):
         """
         We can correctly parse volume info listings for a single volume.
         """
@@ -127,10 +131,21 @@ class TestGlusterPlugin(TestCase):
         self.fake_gluster.add_volume(
             'gv2', ['qa-mesos-persistence:/data/br-gv2'])
 
-        vols = yield self.plug.getVolumes('gv0')
+        vol = yield self.plug.getVolume('gv0')
+        self.assertEqual(vol['id'], gv0.volume_id)
 
-        self.assertEqual(len(vols), 1)
-        self.assertEqual(vols['gv0']['id'], gv0.volume_id)
+    @defer.inlineCallbacks
+    def test_volume_info_missing(self):
+        """
+        If we ask about a missing volume, we get `None`.
+        """
+        self.fake_gluster.add_volume(
+            'gv0', ['qa-mesos-persistence:/data/testbrick'])
+        self.fake_gluster.add_volume(
+            'gv2', ['qa-mesos-persistence:/data/br-gv2'])
+
+        vol = yield self.plug.getVolume('gv1')
+        self.assertEqual(vol, None)
 
     @defer.inlineCallbacks
     def test_volume_create(self):
@@ -151,14 +166,15 @@ class TestGlusterPlugin(TestCase):
     @defer.inlineCallbacks
     def test_volume_create_existing(self):
         """
-        A volume that already exists is not modified.
+        An existing running volume is not modified.
         """
         origvol = self.fake_gluster.add_volume('testvol', bricks=[
             'test:/data1/xylem-testvol', 'test:/data2/xylem-testvol'])
+        originfo = origvol.info()
 
         self.plug.gluster_mounts = ['/data1', '/data2']
         self.plug.gluster_stripe = 2
         yield self.plug.call_createvolume({'name': 'testvol'})
 
         vol = self.fake_gluster.volumes['testvol']
-        self.assertEqual(vol.info(), origvol.info())
+        self.assertEqual(vol.info(), originfo)

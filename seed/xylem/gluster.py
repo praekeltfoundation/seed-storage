@@ -28,16 +28,10 @@ class Plugin(RhumbaPlugin):
         else:
             defer.returnValue(out.strip('\n').split('\n'))
 
-    @defer.inlineCallbacks
-    def getVolumes(self, name=None):
-        """ Gets volume information from glusterfs on this server
+    def _parseVolumeInfo(self, volumeInfo):
+        """ Parse the output of a volume info command
         """
-
-        args = [] if name is None else [name]
-        volumeInfo = yield self.callGluster('volume', 'info', *args)
-
         vols = {}
-
         vol = None
 
         for l in volumeInfo:
@@ -61,7 +55,28 @@ class Plugin(RhumbaPlugin):
                 if k.startswith('Brick') and v:
                     vols[vol]['bricks'].append(v)
 
-        defer.returnValue(vols)
+        return vols
+
+    def getVolumes(self):
+        """ Gets volume information from glusterfs on this server
+        """
+        d = self.callGluster('volume', 'info')
+        d.addCallback(self._parseVolumeInfo)
+        return d
+
+    def getVolume(self, name):
+        """ Gets volume information from glusterfs on this server
+        """
+        def catch_missing_volume(f):
+            if f.value.args[0].endswith('does not exist'):
+                return None
+            return f
+
+        d = self.callGluster('volume', 'info', name)
+        d.addCallback(self._parseVolumeInfo)
+        d.addCallback(lambda vols: vols[name])
+        d.addErrback(catch_missing_volume)
+        return d
 
     def _createArgs(self, name, createpath=True):
         """ Build argument list for volume creation
