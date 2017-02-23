@@ -121,8 +121,12 @@ class Plugin(RhumbaPlugin):
         self.log('[gluster] %s' % ' '.join(args))
 
         yield self.callGluster(*args)
+        yield self.startVolume(name)
 
-        yield self.callGluster('volume', 'start', name)
+    def startVolume(self, name):
+        """ Starts an existing Gluster volume
+        """
+        return self.callGluster('volume', 'start', name)
 
     def call_createdirs(self, args):
         """Fan out call to create directories
@@ -144,17 +148,23 @@ class Plugin(RhumbaPlugin):
     def call_createvolume(self, args):
 
         name = args['name']
+        vol = yield self.getVolume(name)
 
-        vols = yield self.getVolumes()
-
-        if name in vols:
-            self.log("Volume exists %s" % name)
-            defer.returnValue(vols[name])
-
-        else:
+        if vol is None:
+            # The volume doesn't exist, let's create it.
             yield self.createVolume(name)
-
             vols = yield self.getVolumes()
             self.log("Volume created %s" % repr(vols[name]))
+            defer.returnValue(vols[name])
 
+        elif vol['running']:
+            # The volume is running, everything's happy.
+            self.log("Volume exists %s" % name)
+            defer.returnValue(vol)
+
+        else:
+            # The volume exists but isn't running, start it.
+            yield self.startVolume(name)
+            vols = yield self.getVolumes()
+            self.log("Volume started %s" % repr(vols[name]))
             defer.returnValue(vols[name])

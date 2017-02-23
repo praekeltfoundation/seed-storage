@@ -178,3 +178,21 @@ class TestGlusterPlugin(TestCase):
 
         vol = self.fake_gluster.volumes['testvol']
         self.assertEqual(vol.info(), originfo)
+
+    @defer.inlineCallbacks
+    def test_volume_create_stopped(self):
+        """
+        An existing stopped volume is started.
+        """
+        origvol = self.fake_gluster.add_volume(
+            'testvol',
+            status='Stopped',
+            bricks=['test:/data1/xylem-testvol', 'test:/data2/xylem-testvol'])
+        self.assertEqual(origvol.status, 'Stopped')
+
+        self.plug.gluster_mounts = ['/data1', '/data2']
+        self.plug.gluster_stripe = 2
+        yield self.plug.call_createvolume({'name': 'testvol'})
+
+        vol = self.fake_gluster.volumes['testvol']
+        self.assertEqual(vol.status, 'Started')
