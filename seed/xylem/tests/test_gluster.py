@@ -49,7 +49,7 @@ class FakeGluster(object):
     def cmd_volume_info(self, name=None):
         if name:
             if name not in self.volumes:
-                raise Exception('Volume {0} does not exist'.format(name))
+                raise Exception('Volume {0} does not exist\n'.format(name))
             vols = [self.volumes[name]]
         else:
             vols = self.volumes.values()

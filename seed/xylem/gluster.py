@@ -68,7 +68,7 @@ class Plugin(RhumbaPlugin):
         """ Gets volume information from glusterfs on this server
         """
         def catch_missing_volume(f):
-            if f.value.args[0].endswith('does not exist'):
+            if f.value.args[0].strip().endswith('does not exist'):
                 return None
             return f
 
