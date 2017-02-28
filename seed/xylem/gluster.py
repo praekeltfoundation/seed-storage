@@ -28,15 +28,10 @@ class Plugin(RhumbaPlugin):
         else:
             defer.returnValue(out.strip('\n').split('\n'))
 
-    @defer.inlineCallbacks
-    def getVolumes(self):
-        """ Gets volume information from glusterfs on this server
+    def _parseVolumeInfo(self, volumeInfo):
+        """ Parse the output of a volume info command
         """
-
-        volumeInfo = yield self.callGluster('volume', 'info')
-
         vols = {}
-
         vol = None
 
         for l in volumeInfo:
@@ -60,7 +55,28 @@ class Plugin(RhumbaPlugin):
                 if k.startswith('Brick') and v:
                     vols[vol]['bricks'].append(v)
 
-        defer.returnValue(vols)
+        return vols
+
+    def getVolumes(self):
+        """ Gets volume information from glusterfs on this server
+        """
+        d = self.callGluster('volume', 'info')
+        d.addCallback(self._parseVolumeInfo)
+        return d
+
+    def getVolume(self, name):
+        """ Gets volume information from glusterfs on this server
+        """
+        def catch_missing_volume(f):
+            if f.value.args[0].strip().endswith('does not exist'):
+                return None
+            return f
+
+        d = self.callGluster('volume', 'info', name)
+        d.addCallback(self._parseVolumeInfo)
+        d.addCallback(lambda vols: vols[name])
+        d.addErrback(catch_missing_volume)
+        return d
 
     def _createArgs(self, name, createpath=True):
         """ Build argument list for volume creation
@@ -105,8 +121,12 @@ class Plugin(RhumbaPlugin):
         self.log('[gluster] %s' % ' '.join(args))
 
         yield self.callGluster(*args)
+        yield self.startVolume(name)
 
-        yield self.callGluster('volume', 'start', name)
+    def startVolume(self, name):
+        """ Starts an existing Gluster volume
+        """
+        return self.callGluster('volume', 'start', name)
 
     def call_createdirs(self, args):
         """Fan out call to create directories
@@ -128,17 +148,23 @@ class Plugin(RhumbaPlugin):
     def call_createvolume(self, args):
 
         name = args['name']
+        vol = yield self.getVolume(name)
 
-        vols = yield self.getVolumes()
-
-        if name in vols:
-            self.log("Volume exists %s" % name)
-            defer.returnValue(vols[name])
-
-        else:
+        if vol is None:
+            # The volume doesn't exist, let's create it.
             yield self.createVolume(name)
-
             vols = yield self.getVolumes()
             self.log("Volume created %s" % repr(vols[name]))
+            defer.returnValue(vols[name])
 
+        elif vol['running']:
+            # The volume is running, everything's happy.
+            self.log("Volume exists %s" % name)
+            defer.returnValue(vol)
+
+        else:
+            # The volume exists but isn't running, start it.
+            yield self.startVolume(name)
+            vols = yield self.getVolumes()
+            self.log("Volume started %s" % repr(vols[name]))
             defer.returnValue(vols[name])
